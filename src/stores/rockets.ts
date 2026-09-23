@@ -10,6 +10,20 @@ function toComparableName (rocket: Rocket): string {
   return rocketName(rocket).toLocaleLowerCase()
 }
 
+/**
+ * Aborted (superseded) requests stay silent so the newer request owns the UI.
+ * Only axios cancellations (`ERR_CANCELED`, from our AbortController) and
+ * native `AbortError`s qualify — timeouts (`ECONNABORTED`) are real errors
+ * and must reach the Fail/Retry UI.
+ */
+function isAbortError (error: unknown): boolean {
+  if (error instanceof DOMException && error.name === 'AbortError') return true
+  if (typeof error === 'object' && error !== null) {
+    return (error as { code?: unknown }).code === 'ERR_CANCELED'
+  }
+  return false
+}
+
 export const useRocketsStore = defineStore('rockets', () => {
   // --- state ---
   const rockets = ref<Rocket[]>([])
@@ -27,10 +41,6 @@ export const useRocketsStore = defineStore('rockets', () => {
     activeOnly: false,
     sort: 'name-asc',
   })
-
-  // --- client-side pagination (API list endpoint has no usable paging for our filters) ---
-  const page = ref(1)
-  const perPage = ref(10)
 
   let listController: AbortController | null = null
   let detailController: AbortController | null = null
@@ -77,16 +87,6 @@ export const useRocketsStore = defineStore('rockets', () => {
     return result
   })
 
-  const totalPages = computed<number>(() =>
-    Math.max(1, Math.ceil(filteredRockets.value.length / perPage.value)),
-  )
-
-  const paginatedRockets = computed<Rocket[]>(() => {
-    const safePage = Math.min(Math.max(page.value, 1), totalPages.value)
-    const start = (safePage - 1) * perPage.value
-    return filteredRockets.value.slice(start, start + perPage.value)
-  })
-
   const activeDetail = computed<Rocket | null>(() => {
     if (!detailId.value) return null
     return detailCache.value[detailId.value] ?? null
@@ -105,10 +105,9 @@ export const useRocketsStore = defineStore('rockets', () => {
       for (const rocket of data) {
         detailCache.value[String(rocket.id)] = rocket
       }
-      page.value = 1
       listStatus.value = 'success'
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') return
+      if (isAbortError(error)) return
       listError.value = error instanceof Error ? error.message : 'Failed to load rockets.'
       listStatus.value = 'error'
     }
@@ -141,7 +140,7 @@ export const useRocketsStore = defineStore('rockets', () => {
       detailCache.value[key] = data
       detailStatus.value = 'success'
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') return
+      if (isAbortError(error)) return
       detailError.value = error instanceof Error ? error.message : 'Failed to load rocket details.'
       detailStatus.value = 'error'
     }
@@ -176,22 +175,15 @@ export const useRocketsStore = defineStore('rockets', () => {
     }
     localRockets.value = [rocket, ...localRockets.value]
     detailCache.value[String(rocket.id)] = rocket
-    page.value = 1
     return rocket
   }
 
   function setFilter (patch: Partial<RocketFilter>): void {
     filter.value = { ...filter.value, ...patch }
-    page.value = 1
   }
 
   function resetFilter (): void {
     filter.value = { query: '', family: null, activeOnly: false, sort: 'name-asc' }
-    page.value = 1
-  }
-
-  function setPage (next: number): void {
-    page.value = Math.min(Math.max(next, 1), totalPages.value)
   }
 
   function $resetDetail (): void {
@@ -206,11 +198,7 @@ export const useRocketsStore = defineStore('rockets', () => {
     allRockets,
     families,
     filteredRockets,
-    paginatedRockets,
     filter,
-    page,
-    perPage,
-    totalPages,
     listStatus,
     listError,
     detailStatus,
@@ -222,7 +210,6 @@ export const useRocketsStore = defineStore('rockets', () => {
     addRocket,
     setFilter,
     resetFilter,
-    setPage,
     $resetDetail,
   }
 })

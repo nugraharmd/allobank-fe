@@ -4,6 +4,9 @@ A responsive two-screen web app that displays SpaceX rockets from the
 [Launch Library 2 API](https://thespacedevs.com/llapi) by The Space Devs:
 a **rocket list screen** (with filter + add) and a **rocket detail screen**.
 
+No client-side pagination: the list fetches all SpaceX rockets in a single
+API call (`limit=20`, see below) and renders the full filtered result.
+
 ## Features
 
 - **Rocket list** — card grid showing each rocket's image, name, and description
@@ -24,11 +27,11 @@ a **rocket list screen** (with filter + add) and a **rocket detail screen**.
 | Category            | Library / Tool                                      |
 | ------------------- | --------------------------------------------------- |
 | Framework           | [Vue 3](https://vuejs.org/) (Composition API, `<script setup>`) |
-| UI kit              | [Vuetify 3](https://vuetifyjs.com/) (Material components, dark theme) |
+| UI kit              | [Vuetify 3](https://vuetifyjs.com/) (Material components, light theme) |
 | Styling             | SCSS via `sass` / `sass-embedded` (scoped `lang="scss"` + shared partials) |
 | Routing             | `vue-router` + `unplugin-vue-router` (file-based routes in `src/pages`) |
 | State management    | [Pinia](https://pinia.vuejs.org/) (`src/stores/rockets.ts`) |
-| HTTP                | Native `fetch` wrapper (`src/services/rocketApi.ts`) |
+| HTTP                | [axios](https://axios-http.com/) (`src/services/rocketApi.ts`, shared client with timeout + abort-signal support) |
 | Build               | [Vite 5](https://vitejs.dev/) + `vite-plugin-vuetify` |
 | Language / checks   | TypeScript, `vue-tsc`, ESLint |
 
@@ -44,7 +47,10 @@ GET /2.2.0/config/launcher/:id/
 
 `mode=detailed` is required (otherwise `description` and detail fields are
 omitted); `limit=20` is required (default page size is 10, but there are
-13 SpaceX rockets). API version `2.2.0` field mapping:
+13 SpaceX rockets — without it you get 10 rockets and a `next` page instead
+of all 13). That is also why the app does **not** do client-side pagination:
+one `limit=20` call already returns the whole set, so the list renders all
+filtered rockets directly. API version `2.2.0` field mapping:
 
 | Shown as        | Field                       |
 | --------------- | --------------------------- |
@@ -118,15 +124,15 @@ npm run preview
 │   │   ├── LoadingGrid.vue     # skeleton cards for the loading state
 │   │   └── StateMessage.vue    # error/retry + empty-state view
 │   ├── pages/
-│   │   ├── index.vue           # route `/` — rocket list screen
+│   │   ├── index.vue           # route `/` — rocket list screen (filter, full filtered grid)
 │   │   └── rockets/[id].vue    # route `/rockets/:id` — detail screen
 │   ├── plugins/
 │   │   ├── index.ts       # registers Pinia, Vuetify, router
-│   │   └── vuetify.ts     # Vuetify instance (dark theme)
+│   │   └── vuetify.ts     # Vuetify instance (light theme)
 │   ├── router/
 │   │   └── index.ts       # file-based routes (vue-router/auto)
 │   ├── services/
-│   │   └── rocketApi.ts   # Launch Library 2 fetch wrappers
+│   │   └── rocketApi.ts   # Launch Library 2 axios client (list + detail)
 │   ├── stores/
 │   │   └── rockets.ts     # Pinia store: rockets, filters, statuses, local adds
 │   ├── styles/
@@ -153,7 +159,23 @@ npm run preview
 - **Lifecycles** — the list fetches on `onMounted` (once); the detail screen
   fetches on mount and re-fetches whenever the route `id` changes.
 - **UI states** — `LoadingGrid` skeletons while waiting, `StateMessage` with a
-  **Retry** button on errors, live result counts on success.
+  **Retry** button on errors, live result counts on success. Both the list
+  (`listStatus`) and detail (`detailStatus`) screens implement the full
+  Loading → Fail/Retry → Success cycle.
+
+## Requirements Coverage
+
+| Requirement | Status | Implementation |
+| ----------- | ------ | -------------- |
+| Use Launch Library 2 API for rocket data | ✅ Done | `src/services/rocketApi.ts` (axios) — `GET /2.2.0/config/launcher/?manufacturer__name=SpaceX&mode=detailed&limit=20` (list, all 13 in one call) + `GET /2.2.0/config/launcher/:id/` (detail) on the `lldev` host |
+| Implement routers | ✅ Done | `vue-router` + file-based routes (`src/pages/index.vue` → `/`, `src/pages/rockets/[id].vue` → `/rockets/:id`); card → detail navigation, back-to-list buttons |
+| Implement state management | ✅ Done | Pinia `useRocketsStore` (`src/stores/rockets.ts`): list, detail cache, filters, statuses |
+| Implement lifecycles | ✅ Done | `onMounted` fetch on both screens; detail `watch`es route `id` for refetch |
+| Components (image, name, description, cost, country, first flight) | ✅ Done | `RocketCard` (image/name/description/chips) + detail screen (`DetailField` rows for cost, country, first flight, family, reusable, manufacturer) with missing-data fallbacks |
+| UI states (Loading / Fail-Retry / Success) | ✅ Done | Both screens: skeleton loading, `StateMessage` error + **Retry**, success result view |
+| Show loading while waiting for API | ✅ Done | `LoadingGrid` (list) and skeleton card (detail) gated on `…Status === 'loading' \| 'idle'` |
+| Retry button on error | ✅ Done | `StateMessage show-retry` → `store.loadRockets` (list) / `store.loadRocketDetail(id)` (detail) |
+| Show result on API response | ✅ Done | Card grid + counts (list), full detail card (detail) on `…Status === 'success'` |
 
 ## Notes & Caveats
 

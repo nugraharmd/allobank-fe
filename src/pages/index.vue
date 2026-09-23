@@ -52,7 +52,7 @@
     <template v-else>
       <v-row v-if="store.filteredRockets.length > 0">
         <v-col
-          v-for="rocket in store.paginatedRockets"
+          v-for="rocket in store.filteredRockets"
           :key="rocket.id"
           cols="12"
           sm="6"
@@ -70,22 +70,6 @@
         show-reset
         @reset="store.resetFilter"
       />
-
-      <div
-        v-if="store.filteredRockets.length > 0 && store.totalPages > 1"
-        class="d-flex flex-column align-center ga-2 mt-6"
-      >
-        <span class="text-body-2 text-medium-emphasis">
-          Showing {{ pageRangeStart }}–{{ pageRangeEnd }} of {{ store.filteredRockets.length }} rockets
-        </span>
-        <v-pagination
-          :model-value="store.page"
-          :length="store.totalPages"
-          :total-visible="5"
-          density="comfortable"
-          @update:model-value="onPageChange"
-        />
-      </div>
     </template>
 
     <AddRocketDialog
@@ -108,7 +92,7 @@
 </template>
 
 <script setup lang="ts">
-  import { computed, onMounted, ref, watch } from 'vue'
+  import { computed, onMounted, ref } from 'vue'
   import AddRocketDialog from '@/components/AddRocketDialog.vue'
   import LoadingGrid from '@/components/LoadingGrid.vue'
   import RocketCard from '@/components/RocketCard.vue'
@@ -127,27 +111,9 @@
     const total = store.allRockets.length
     const shown = store.filteredRockets.length
     if (total === 0) return 'No rockets loaded yet.'
-    if (shown === 0) return `No matches out of ${total} rockets`
-    if (store.totalPages <= 1) {
-      return shown === total
-        ? `Showing all ${total} rockets`
-        : `Showing ${shown} of ${total} rockets`
-    }
-    return `Page ${store.page} of ${store.totalPages} · Showing ${pageRangeStart.value}–${pageRangeEnd.value} of ${shown} rockets (${total} total)`
-  })
-
-  const pageRangeStart = computed(() => {
-    if (store.filteredRockets.length === 0) return 0
-    return (store.page - 1) * store.perPage + 1
-  })
-
-  const pageRangeEnd = computed(() =>
-    Math.min(store.page * store.perPage, store.filteredRockets.length),
-  )
-
-  // Keep the current page valid when filters shrink the result set.
-  watch(() => store.totalPages, (total) => {
-    if (store.page > total) store.setPage(total)
+    return shown === total
+      ? `Showing all ${total} rockets`
+      : `Showing ${shown} of ${total} rockets`
   })
 
   // Lifecycle: fetch once when the list screen mounts.
@@ -156,10 +122,6 @@
       store.loadRockets()
     }
   })
-
-  function onPageChange (next: number): void {
-    store.setPage(next)
-  }
 
   function onAdd (payload: {
     name: string
