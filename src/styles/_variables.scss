@@ -1,0 +1,13 @@
+// Shared SCSS tokens for Rocket Explorer components.
+//
+// Note: this partial only holds variables (no CSS output), so it is safe
+// to `@use` from any number of scoped component styles.
+// Vuetify theme itself is configured separately in `settings.scss`.
+
+$card-transition: transform 0.15s ease, box-shadow 0.15s ease;
+$card-hover-lift: -2px;
+
+$image-fallback-min-height: 160px;
+
+$state-min-height: 320px;
+$state-message-max-width: 480px;

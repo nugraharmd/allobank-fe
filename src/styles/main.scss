@@ -1,0 +1,15 @@
+// Global (unscoped) app styles, loaded via `main.ts`.
+// Component-level styles live in each `.vue` file as scoped SCSS.
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: rgb(var(--v-theme-primary));
+  color: #fff;
+}
